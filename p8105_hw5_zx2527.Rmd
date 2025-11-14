@@ -1,0 +1,54 @@
+---
+title: "p8105_hw5_zx2527"
+author: "Zihan Xiong"
+date: "2025-11-14"
+output: github_document
+---
+# Problem 1
+
+```{r}
+library(tidyverse)
+```
+
+```{r}
+one_bir=function(n) {
+  birthdays=sample(1:365, n, replace = TRUE)
+  any(duplicated(birthdays))
+}
+```
+## check duplications
+```{r}
+one_bir(10)
+```
+Yes, there are duplications. 
+
+```{r}
+replicate_one_n=function(n) {
+  results=map_dbl(1:10000, ~one_bir(n))
+  mean(results)
+}
+```
+
+```{r}
+n_list= 2:50
+probabilities=
+  tibble(
+    n=n_list,
+    prob=map_dbl(n_list, replicate_one_n)
+  )
+probabilities
+```
+
+```{r}
+probabilities |>
+  ggplot(aes(x=n, y=prob))+
+  geom_line()+
+  geom_point()+
+  labs(
+    title="Probability of Shared Birthdays vs Group Size",
+    x="Group Size (n)",
+    y="Probability"
+  )
+ggsave("birthday vs group size.png", width=8, height=6, dpi=300)
+```
+
