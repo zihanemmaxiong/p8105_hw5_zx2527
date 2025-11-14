@@ -10,23 +10,32 @@ output: github_document
 library(tidyverse)
 ```
 
+
 ```{r}
-one_bir=function(n) {
-  birthdays=sample(1:365, n, replace = TRUE)
-  any(duplicated(birthdays))
+bday_sim=function(n_room) {
+  birthdays=sample(1:365, n_room, replace = TRUE)
+  repeated_bday=length(unique(birthdays)) < n_room
+  return(repeated_bday)
 }
 ```
 ## check duplications
 ```{r}
-one_bir(10)
+bday_sim(20)
 ```
 Yes, there are duplications. 
 
 ```{r}
-replicate_one_n=function(n) {
-  results=map_dbl(1:10000, ~one_bir(n))
-  mean(results)
-}
+bday_sim_results=
+  expand_grid(
+    bdays=2:50,
+    iter=1:10000
+  ) |>
+  mutate(
+    results=map_lgl(bdays, bday_sim))|>
+      group_by(bdays) |>
+  summarise(
+    prob_repeat=mean(results)
+  )
 ```
 
 ```{r}
@@ -51,4 +60,7 @@ probabilities |>
   )
 ggsave("birthday vs group size.png", width=8, height=6, dpi=300)
 ```
+The plot shows the estimated probability of at least two people shared the same birthday as the group size increases from 2 to 50. The probability increases as the group size is increasing, indicates that when the group is small, the probability of at least 2 people shared the same birthday is close to 0, while the probability increases sharply as the group size grows.
+
+# Problem 2
 
