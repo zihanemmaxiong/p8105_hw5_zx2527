@@ -6,11 +6,30 @@ output: github_document
 ---
 # Problem 1
 
-```{r}
+```{r, include = FALSE, message = FALSE, warning = FALSE}
 library(tidyverse)
+library(broom)
+
+knitr::opts_chunk$set(
+	echo = TRUE,
+	warning = FALSE,
+  fig.width = 6,
+  fig.asp = .6,
+  out.width = "90%"
+)
+
+theme_set(theme_minimal() + theme(legend.position = "bottom"))
+
+options(
+  ggplot2.continuous.colour = "viridis",
+  ggplot2.continuous.fill = "viridis"
+)
+
+scale_colour_discrete = scale_colour_viridis_d
+scale_fill_discrete = scale_fill_viridis_d
 ```
 
-
+## writing function
 ```{r}
 bday_sim=function(n_room) {
   birthdays=sample(1:365, n_room, replace = TRUE)
@@ -22,7 +41,6 @@ bday_sim=function(n_room) {
 ```{r}
 bday_sim(20)
 ```
-Yes, there are duplications. 
 
 ```{r}
 bday_sim_results=
@@ -39,18 +57,8 @@ bday_sim_results=
 ```
 
 ```{r}
-n_list= 2:50
-probabilities=
-  tibble(
-    n=n_list,
-    prob=map_dbl(n_list, replicate_one_n)
-  )
-probabilities
-```
-
-```{r}
-probabilities |>
-  ggplot(aes(x=n, y=prob))+
+bday_sim_results |>
+  ggplot(aes(x=bdays, y=prob_repeat))+
   geom_line()+
   geom_point()+
   labs(
@@ -63,4 +71,214 @@ ggsave("birthday vs group size.png", width=8, height=6, dpi=300)
 The plot shows the estimated probability of at least two people shared the same birthday as the group size increases from 2 to 50. The probability increases as the group size is increasing, indicates that when the group is small, the probability of at least 2 people shared the same birthday is close to 0, while the probability increases sharply as the group size grows.
 
 # Problem 2
+
+## writing function
+```{r}
+sim_mean_sd=function(mu, n_subj=30, sigma=5){
+  x=rnorm(n_subj, mean=mu, sd=sigma)
+  t_res=broom::tidy(t.test(x,mu=0))
+  
+  tibble(
+    mu_true=mu,
+    mu_hat=mean(x),
+    p_value=t_res$p.value,
+    reject=p_value<0.05
+  )
+}
+```
+
+```{r}
+sim_mean_sd(mu=0)
+sim_mean_sd(mu=2)
+```
+
+```{r}
+sim_results_df=
+  expand_grid(
+    mu=0:6,
+    iter=1:5000
+  ) |>
+  mutate(
+    results=map(mu,sim_mean_sd)
+  ) |>
+  unnest(results)
+```
+
+```{r}
+power_df=
+  sim_results_df |>
+  group_by(mu_true) |>
+  summarise(
+    power=mean(reject),
+    .groups = "drop"
+  )
+```
+
+## make a plot for power vs true mu
+```{r}
+power_df |>
+  ggplot(aes(x=mu_true, y=power))+
+  geom_point()+
+  geom_line()+
+  scale_x_continuous(breaks = seq(0,6,by=1))+
+  scale_y_continuous(breaks=seq(0,1,by=0.05))+
+  labs(
+    x="True mean (mu)",
+    y="Power (Pr(reject H0))",
+    title = "Power of one-sample t-test vs true mean"
+  )
+```
+Description:
+
+The plot shows the power of the one-sample t-test increases monotonically with the true value of mu. When mu=0 (when the null hypothesis is true), the probability of rejecting the null is approximately 0.05, which matches the nominal type I error. As mu increases from 0 to 6, the probability of rejecting null hypothesis increases. This pattern is expected because a larger effect size produces a larger t-statistic on average, making the test more sensitive and more likely to detect the deviation from the null.
+
+## plot the average mu_hat compare "all samples" vs "rejected only"
+
+summarise the means
+```{r}
+est_summary_df=
+  sim_results_df |>
+  group_by(mu_true) |>
+  summarise(
+    mean_all=mean(mu_hat),
+    mean_reject=mean(mu_hat[reject]),
+    .groups = "drop"
+  )
+```
+
+```{r}
+est_long_df=
+  est_summary_df |>
+  pivot_longer(
+    cols = c(mean_all, mean_reject),
+    names_to = "type",
+    values_to = "mu_hat_avg"
+  )
+```
+## make a plot
+```{r}
+est_long_df |>
+  ggplot(aes(x=mu_true,y=mu_hat_avg,colour = type))+
+  geom_point()+
+  geom_line()+
+  labs(
+    x="True mean mu",
+    y="Average mu",
+    color="",
+    title = "Comparison of sample mean (μ̂): all samples vs rejected samples"
+  )
+```
+
+No, the sample average of mu_hat among tests where the null hypothesis is rejected is not approximately equal to the true mu, especially when the true effect size is small. This is because rejection of the null hypothesis (p < 0.05) tends to occur only when the observed sample mean 
+is unusually far from 0. When the true mean is small, only samples with large positive deviations are likely to be significant. As a result, conditioning on “rejecting H₀” introduces selection bias, and it reflects the fact that statistically significant estimates tend to overestimate the true effect when power is low.
+
+# Problem 3
+```{r}
+homicide_df =
+  read_csv("./data/homicide-data.csv") |>
+  janitor::clean_names() |>
+  mutate(
+    city_state=str_c(city,", ", state)
+  )
+homicide_df
+```
+
+Description for the raw data:
+
+
+This dataset includes `r nrows` individuals and 12 variables. It includes variables listed below:
+
+1. `uid`
+2. `reported_date`
+3. `victim_last`: last name of victim
+4. `victim_first`" first name of victim
+5. `victim_race`
+6. `victim_age`
+7. `victim_sex`
+8. `city`
+9. `state`
+10. `lat`: latitude 
+11. `lon`: longitude
+12. `disposition`
+
+To summarise: closed without arrest and open/no arrest
+```{r}
+city_summary =
+  homicide_df |>
+  mutate(
+    unsolved = disposition %in% c("Closed without arrest", "Open/No arrest")
+  ) |>
+  group_by(city_state) |>
+  summarise(
+    total = n(),
+    unsolved = sum(unsolved),
+    .groups = "drop"
+  )
+city_summary
+```
+## proportion of homicides that are unsolved
+```{r}
+baltimore =
+  city_summary |>
+  filter(city_state == "Baltimore, MD")
+```
+
+```{r}
+baltimore_test =
+  prop.test(baltimore$unsolved, baltimore$total)
+```
+
+```{r}
+baltimore_tidy =
+  broom::tidy(baltimore_test)
+```
+
+```{r}
+baltimore_estimate = baltimore_tidy |> pull(estimate)
+baltimore_ci_low  = baltimore_tidy |> pull(conf.low)
+baltimore_ci_high = baltimore_tidy |> pull(conf.high)
+
+baltimore_estimate
+baltimore_ci_low
+baltimore_ci_high
+```
+
+## prop.test for each city
+```{r}
+city_results =
+  city_summary |>
+  mutate(
+    test = map2(unsolved, total, ~ prop.test(.x, .y)),
+    test_tidy = map(test, broom::tidy)
+  ) |>
+  unnest(test_tidy) |>
+  select(city_state, estimate, conf.low, conf.high)
+city_results
+```
+## make plots
+```{r}
+city_results_plot =
+  city_results |>
+  arrange(estimate) |>
+  mutate(
+    city_state = factor(city_state, levels = city_state)
+  )
+
+```
+
+```{r}
+city_results_plot |>
+  ggplot(aes(x = estimate, y = city_state)) +
+  geom_point() +
+  geom_errorbar(aes(xmin = conf.low, xmax = conf.high), width = 0.2) +
+  labs(
+    x = "Estimated proportion of unsolved homicides",
+    y = "City",
+    title = "Unsolved homicide proportions with 95% CI for each U.S. city"
+  ) +
+  theme_minimal()
+ggsave("city_plot.pdf", width = 8, height = 15)
+
+
+```
 
