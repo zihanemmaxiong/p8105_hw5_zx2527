@@ -188,6 +188,7 @@ nrows <-nrow (homicide_df)
 
 Description for the raw data:
 
+The Washington Post dataset documents more than 52,000 homicide cases from 50 major U.S. cities between 2007 and 2017, with each row corresponding to an individual incident.
 
 This dataset includes `r nrows` individuals and 12 variables. It includes variables listed below:
 
@@ -219,7 +220,7 @@ city_summary =
   )
 city_summary
 ```
-## proportion of homicides that are unsolved
+## prop.test on Baltimore, MD
 ```{r}
 baltimore =
   city_summary |>
@@ -240,11 +241,14 @@ baltimore_tidy =
 baltimore_estimate = baltimore_tidy |> pull(estimate)
 baltimore_ci_low  = baltimore_tidy |> pull(conf.low)
 baltimore_ci_high = baltimore_tidy |> pull(conf.high)
+```
 
+```{r}
 baltimore_estimate
 baltimore_ci_low
 baltimore_ci_high
 ```
+
 
 ## prop.test for each city
 ```{r}
@@ -271,19 +275,16 @@ city_results_plot =
 
 ```{r}
 city_results_plot |>
-  ggplot(aes(x = estimate, y = city_state)) +
-  geom_point() +
-  geom_errorbar(aes(xmin = conf.low, xmax = conf.high), width = 0.2) +
+  ggplot(aes(y = estimate, x = city_state)) +
+  geom_point(size = 1, color = "blue") +
+  geom_errorbar(aes(ymin = conf.low, ymax = conf.high), width = 0.2) +
   labs(
-    x = "Estimated proportion of unsolved homicides",
-    y = "City",
+    y = "Estimated proportion of unsolved homicides",
+    x = "City",
     title = "Unsolved homicide proportions with 95% CI for each U.S. city"
   ) +
-  theme_minimal()+
-  theme(
-  axis.text.y = element_text(size = 6)   
-)
-ggsave("city_plot.pdf", width = 8, height = 15)
+    coord_cartesian(ylim = c(0.20, 0.80)) +
+    theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5))
 
 
 ```
